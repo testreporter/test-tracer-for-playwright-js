@@ -4,46 +4,37 @@ import type {
   Suite,
   TestCase,
   TestResult,
-  TestStep,
-  FullResult,
 } from '@playwright/test/reporter';
-import fs from 'fs';
-import os from 'os';
+import fs, { readFileSync } from 'fs';
 import AdmZip from 'adm-zip';
-import {
-  TestTracerFeature,
-  TestTracerOptions,
-  TestResult as TestTracerResult,
-} from './TestResult';
+import { TestTracerFeature, TestTracerOptions } from './Types';
+import { TestResult as TestTracerResult } from './TestResult';
 
 class TestTracerReporter implements Reporter {
-  // private results: TestTracerResult[];
   private options: TestTracerOptions | null = null;
 
   private testCount = 0;
+
+  private testTracerBaseUrl = 'https://api.testtracer.io';
+
+  private uploadKey = '';
 
   private results: TestTracerResult[] = [];
 
   private featureUniqueName = '';
 
   private featureDisplayName = '';
-
-  private feature: TestTracerFeature | null = null;
-
   private resultsDir = 'test-tracer';
 
   steps: [];
 
   constructor() {
-    // this.result = new TestTracerResult();
-
     fs.rmSync(this.resultsDir, { recursive: true, force: true });
     fs.mkdir(this.resultsDir, (error) => {
       if (error) {
         console.error('Failed to create the Test Tracer directory');
       }
     });
-    // this.result: ITestResult;
     this.steps = [];
   }
 
@@ -67,15 +58,8 @@ class TestTracerReporter implements Reporter {
     this.options.version = process.env.TEST_TRACER_VERSION;
     this.options.runAlias = process.env.TEST_TRACER_RUN_ALIAS;
     this.options.projectName = process.env.TEST_TRACER_PROJECT_NAME;
+    this.uploadKey = process.env.TEST_TRACER_UPLOAD_TOKEN || '';
   }
-
-  // onStepEnd(test: TestCase, result: TestResult, step: TestStep): void {
-  //   this.steps.push({
-  //     duration: step.duration,
-  //     status: step.error ? "Failed" : "Passed",
-  //     name: step.title,
-  //   });
-  // }
 
   onTestEnd(test: TestCase, result: TestResult) {
     test.results.forEach((res) => {
@@ -121,21 +105,17 @@ class TestTracerReporter implements Reporter {
         };
       }
 
-      fs.writeFile(
+      fs.writeFileSync(
         `${this.resultsDir}/${report.testCaseRunId}.json`,
-        JSON.stringify(report),
-        (err) => {
-          if (err) console.error({ err });
-        }
+        JSON.stringify(report)
       );
     });
   }
 
-  onEnd(
-    result: FullResult
-  ): Promise<{ status?: FullResult['status'] } | undefined | void> | void {
-    this.zipResults();
-    this.uploadResults();
+  async onExit(): Promise<void> {
+    await this.zipResults();
+    await this.uploadResults();
+    await this.processResults();
   }
 
   findName = (suite: Suite) => {
@@ -161,39 +141,46 @@ class TestTracerReporter implements Reporter {
     };
   }
 
-  zipResults = (): void => {
+  zipResults = async (): Promise<void> => {
     const zip = new AdmZip();
 
-    fs.readdir(this.resultsDir, (err, files) => {
-      console.log({ err });
-      files.forEach((file) => {
-        zip.addLocalFile(file);
-      });
+    const files = fs.readdirSync(this.resultsDir);
+
+    files.forEach((f: string) => {
+      console.log({ f });
+      zip.addLocalFile(`${this.resultsDir}/${f}`);
     });
 
-    zip.writeZip(`${this.resultsDir}/results.zip`);
+    await zip.writeZip(`${this.resultsDir}/results.zip`);
   };
 
-  uploadResults = (): void => {
-    const upload = (file: string) => {
-      console.log('Fetching...');
-      console.log(file);
-      fetch('http://localhost:5139/test-data/upload', {
-        method: 'POST',
-        headers: {
-          'a-api-key': 'key-here',
-        },
-      })
-        .then((r) => console.error({ r }))
-        .then((success) => {
-          console.error({ success });
-        })
-        .catch((error) => {
-          console.error({ error });
-        });
-    };
+  processResults = async (): Promise<void> => {
+    const resp = await fetch(`${this.testTracerBaseUrl}/test-data/process`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': this.uploadKey,
+      },
+    });
 
-    upload(`${this.resultsDir}/results.zip`);
+    console.log({ resp });
+  };
+
+  uploadResults = async (): Promise<void> => {
+    const form = new FormData();
+    const data = readFileSync(`${this.resultsDir}/results.zip`);
+
+    const blob = new Blob([data]);
+    form.set('file', blob, `${this.resultsDir}/results.zip`);
+
+    const resp = await fetch(`${this.testTracerBaseUrl}/test-data/upload`, {
+      method: 'POST',
+      body: form,
+      headers: {
+        'x-api-key': this.uploadKey,
+      },
+    });
+
+    console.log({ resp });
   };
 }
 

@@ -1,0 +1,31 @@
+{
+  "name": "test-tracer-for-playwright-js",
+  "version": "0.0.1",
+  "description": "Package to allow collecting Playwright test results for use in Test Tracer.",
+  "main": "plugin.ts",
+  "scripts": {
+    "test": "npm run test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/testreporter/test-tracer-for-playwright-js.git"
+  },
+  "keywords": [
+    "Test",
+    "Tracer",
+    "Playwright",
+    "Reporter"
+  ],
+  "author": "Test Tracer",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/testreporter/test-tracer-for-playwright-js/issues"
+  },
+  "homepage": "https://github.com/testreporter/test-tracer-for-playwright-js#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.46.1",
+    "@types/node": "^22.4.2",
+    "adm-zip": "^0.5.15",
+    "uuid": "^10.0.0"
+  }
+}
